@@ -4,30 +4,37 @@ import pandas as pd
 RAW_FOLDERS = [
     "data/raw/amfi",
     "data/raw/nav",
-    "data/raw/other"
+    "data/raw/others"
 ]
 
-for folder in RAW_FOLDERS:
-    csv_files = [f for f in os.listdir(folder) if f.endswith(".csv")]
-
-    for file in csv_files:
-        path = os.path.join(folder, file)
-
-# Load all CSV files
+print("=" * 80)
+print("DATA INGESTION")
+print("=" * 80)
 
 csv_files = []
+
+# Collect all CSV files
 for folder in RAW_FOLDERS:
-    csv_files.extend([os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".csv")])
 
-print("=" * 80)
-print(f"Found {len(csv_files)} CSV files")
-print("=" * 80)
+    if not os.path.exists(folder):
+        print(f"Folder not found: {folder}")
+        continue
 
-for file in csv_files:
+    csv_files.extend([
+        os.path.join(folder, f)
+        for f in os.listdir(folder)
+        if f.endswith(".csv")
+    ])
 
-    path = os.path.join(RAW_DATA, file)
+print(f"\nFound {len(csv_files)} CSV files")
+
+# Read every CSV
+for path in csv_files:
+
+    file = os.path.basename(path)
 
     try:
+
         df = pd.read_csv(path)
 
         if df.empty:
@@ -36,8 +43,10 @@ for file in csv_files:
 
         print("\n" + "=" * 80)
         print(file)
+        print("=" * 80)
 
         print("Shape:", df.shape)
+
         print("\nData Types")
         print(df.dtypes)
 
@@ -51,63 +60,61 @@ for file in csv_files:
         print(df.duplicated().sum())
 
     except pd.errors.EmptyDataError:
-        print(f"\n⚠ {file} is an empty CSV file.")
+        print(f"\n⚠ {file} is empty.")
+
     except Exception as e:
         print(f"\n❌ Error reading {file}: {e}")
 
-# Explore fund_master.csv
+# --------------------------------------------------
+# Explore Processed Fund Master
+# --------------------------------------------------
 
-
-print("\n")
-print("=" * 80)
+print("\n" + "=" * 80)
 print("FUND MASTER ANALYSIS")
 print("=" * 80)
 
-fund_master = pd.read_csv("data/raw/fund_master.csv")
+fund_master_path = "data/processed/fund_master.csv"
 
-print("\nColumns in fund_master:")
-print(fund_master.columns.tolist())
+if os.path.exists(fund_master_path):
 
-# Print unique values if the columns exist
-columns_to_check = [
-    "fund_house",
-    "category",
-    "subcategory",
-    "risk_grade"
-]
+    fund_master = pd.read_csv(fund_master_path)
 
-for col in columns_to_check:
-    if col in fund_master.columns:
-        print(f"\nUnique {col}:")
-        print(fund_master[col].dropna().unique())
-    else:
-        print(f"\nColumn '{col}' not found.")
+    print("\nColumns:")
+    print(fund_master.columns.tolist())
 
-# Validate AMFI Codes
+    print("\nShape:")
+    print(fund_master.shape)
 
-print("\n")
-print("=" * 80)
-print("AMFI VALIDATION")
-print("=" * 80)
+    print("\nFirst 5 Rows:")
+    print(fund_master.head())
 
-nav_history = pd.read_csv("data/raw/nav_history.csv")
+    print("\nMissing Values:")
+    print(fund_master.isnull().sum())
 
-if "scheme_code" in fund_master.columns and "scheme_code" in nav_history.columns:
-
-    master_codes = set(fund_master["scheme_code"])
-    nav_codes = set(nav_history["scheme_code"])
-
-    missing = master_codes - nav_codes
-
-    print(f"Total scheme codes in fund_master : {len(master_codes)}")
-    print(f"Total scheme codes in nav_history : {len(nav_codes)}")
-    print(f"Missing Scheme Codes              : {len(missing)}")
-
-    if len(missing) == 0:
-        print("✅ All AMFI codes are present.")
-    else:
-        print("Missing Codes:")
-        print(sorted(missing))
+    print("\nDuplicate Rows:")
+    print(fund_master.duplicated().sum())
 
 else:
-    print("⚠ 'scheme_code' column not found.")
+    print("Processed fund_master.csv not found.")
+
+# --------------------------------------------------
+# Validation
+# --------------------------------------------------
+
+print("\n" + "=" * 80)
+print("VALIDATION")
+print("=" * 80)
+
+if os.path.exists(fund_master_path):
+
+    duplicates = fund_master["scheme_code"].duplicated().sum()
+
+    print("Duplicate Scheme Codes:", duplicates)
+
+    print("Unique Scheme Codes :", fund_master["scheme_code"].nunique())
+
+    print("Validation completed successfully.")
+
+else:
+
+    print("Validation skipped because processed fund_master.csv is missing.")
