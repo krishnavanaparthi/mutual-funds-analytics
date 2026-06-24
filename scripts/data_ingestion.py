@@ -1,34 +1,52 @@
 import os
 import pandas as pd
 
+# ==========================================================
+# DAY 1 - DATA INGESTION & DATA QUALITY ANALYSIS
+# ==========================================================
+
 RAW_FOLDERS = [
     "data/raw/amfi",
-    "data/raw/nav",
-    "data/raw/others"
+    "data/raw/mentor",
+    "data/raw/nav"
 ]
 
+REPORT_FOLDER = "reports"
+REPORT_FILE = os.path.join(REPORT_FOLDER, "data_quality_summary.md")
+
+os.makedirs(REPORT_FOLDER, exist_ok=True)
+
 print("=" * 80)
-print("DATA INGESTION")
+print("DAY 1 : DATA INGESTION")
 print("=" * 80)
 
 csv_files = []
+summary = []
 
-# Collect all CSV files
+# ==========================================================
+# Collect CSV Files
+# ==========================================================
+
 for folder in RAW_FOLDERS:
 
     if not os.path.exists(folder):
-        print(f"Folder not found: {folder}")
+        print(f"⚠ Folder not found : {folder}")
         continue
 
-    csv_files.extend([
+    files = [
         os.path.join(folder, f)
         for f in os.listdir(folder)
         if f.endswith(".csv")
-    ])
+    ]
 
-print(f"\nFound {len(csv_files)} CSV files")
+    csv_files.extend(files)
 
-# Read every CSV
+print(f"\nTotal CSV Files Found : {len(csv_files)}")
+
+# ==========================================================
+# Read Every Dataset
+# ==========================================================
+
 for path in csv_files:
 
     file = os.path.basename(path)
@@ -45,45 +63,74 @@ for path in csv_files:
         print(file)
         print("=" * 80)
 
-        print("Shape:", df.shape)
+        print("Shape:")
+        print(df.shape)
 
-        print("\nData Types")
+        print("\nColumns:")
+        print(df.columns.tolist())
+
+        print("\nData Types:")
         print(df.dtypes)
 
-        print("\nFirst 5 Rows")
+        print("\nFirst 5 Rows:")
         print(df.head())
 
-        print("\nMissing Values")
+        print("\nMissing Values:")
         print(df.isnull().sum())
 
-        print("\nDuplicate Rows")
+        print("\nDuplicate Rows:")
         print(df.duplicated().sum())
 
+        summary.append({
+            "Dataset": file,
+            "Rows": df.shape[0],
+            "Columns": df.shape[1],
+            "Missing Values": int(df.isnull().sum().sum()),
+            "Duplicate Rows": int(df.duplicated().sum())
+        })
+
     except pd.errors.EmptyDataError:
-        print(f"\n⚠ {file} is empty.")
+        print(f"\n⚠ {file} is an empty CSV.")
 
     except Exception as e:
-        print(f"\n❌ Error reading {file}: {e}")
+        print(f"\n❌ Error reading {file}")
+        print(e)
 
-# --------------------------------------------------
-# Explore Processed Fund Master
-# --------------------------------------------------
+# ==========================================================
+# DATASET SUMMARY
+# ==========================================================
 
-print("\n" + "=" * 80)
+print("\n")
+print("=" * 80)
+print("DATASET SUMMARY")
+print("=" * 80)
+
+summary_df = pd.DataFrame(summary)
+
+print(summary_df)
+
+# ==========================================================
+# FUND MASTER ANALYSIS
+# ==========================================================
+
+print("\n")
+print("=" * 80)
 print("FUND MASTER ANALYSIS")
 print("=" * 80)
 
-fund_master_path = "data/processed/fund_master.csv"
+fund_master_path = "data/raw/amfi/01_fund_master.csv"
+
+fund_master = None
 
 if os.path.exists(fund_master_path):
 
     fund_master = pd.read_csv(fund_master_path)
 
-    print("\nColumns:")
-    print(fund_master.columns.tolist())
-
     print("\nShape:")
     print(fund_master.shape)
+
+    print("\nColumns:")
+    print(fund_master.columns.tolist())
 
     print("\nFirst 5 Rows:")
     print(fund_master.head())
@@ -94,27 +141,117 @@ if os.path.exists(fund_master_path):
     print("\nDuplicate Rows:")
     print(fund_master.duplicated().sum())
 
+    if "Scheme Code" in fund_master.columns:
+
+        print("\nUnique Scheme Codes:")
+        print(fund_master["Scheme Code"].nunique())
+
+    else:
+        print("\n⚠ 'Scheme Code' column not found.")
+
 else:
-    print("Processed fund_master.csv not found.")
 
-# --------------------------------------------------
-# Validation
-# --------------------------------------------------
+    print("⚠ 01_fund_master.csv not found.")
 
-print("\n" + "=" * 80)
-print("VALIDATION")
+# ==========================================================
+# VALIDATION
+# ==========================================================
+
+print("\n")
+print("=" * 80)
+print("AMFI CODE VALIDATION")
 print("=" * 80)
 
-if os.path.exists(fund_master_path):
+nav_history_path = "data/raw/mentor/02_nav_history.csv"
 
-    duplicates = fund_master["scheme_code"].duplicated().sum()
+if (
+    fund_master is not None
+    and os.path.exists(nav_history_path)
+):
 
-    print("Duplicate Scheme Codes:", duplicates)
+    nav_history = pd.read_csv(nav_history_path)
 
-    print("Unique Scheme Codes :", fund_master["scheme_code"].nunique())
+    if (
+        "Scheme Code" in fund_master.columns
+        and "amfi_code" in nav_history.columns
+    ):
 
-    print("Validation completed successfully.")
+        master_codes = set(fund_master["Scheme Code"].dropna())
+
+        nav_codes = set(nav_history["amfi_code"].dropna())
+
+        missing_codes = master_codes - nav_codes
+
+        duplicate_codes = fund_master["Scheme Code"].duplicated().sum()
+
+        print("Duplicate Scheme Codes :", duplicate_codes)
+
+        print("Unique Scheme Codes :", len(master_codes))
+
+        print("NAV Codes :", len(nav_codes))
+
+        print("Missing Codes :", len(missing_codes))
+
+        if len(missing_codes) == 0:
+
+            print("\n✅ All Scheme Codes exist in NAV History.")
+
+        else:
+
+            print("\n❌ Missing Scheme Codes Found")
+
+            print(list(missing_codes)[:20])
+
+    else:
+
+        print("⚠ Required columns are missing.")
 
 else:
 
-    print("Validation skipped because processed fund_master.csv is missing.")
+    print("⚠ Validation skipped because required files are missing.")
+
+# ==========================================================
+# SAVE REPORT
+# ==========================================================
+
+with open(REPORT_FILE, "w", encoding="utf-8") as report:
+
+    report.write("# Day 1 Data Quality Summary\n\n")
+
+    report.write("## Dataset Summary\n\n")
+
+    report.write(summary_df.to_markdown(index=False))
+
+    report.write("\n\n")
+
+    if fund_master is not None:
+
+        report.write("## Fund Master\n\n")
+
+        report.write(f"Total Records : {len(fund_master)}\n\n")
+
+        if "Scheme Code" in fund_master.columns:
+
+            report.write(
+                f"Unique Scheme Codes : {fund_master['Scheme Code'].nunique()}\n\n"
+            )
+
+            report.write(
+                f"Duplicate Scheme Codes : {fund_master['Scheme Code'].duplicated().sum()}\n\n"
+            )
+
+    report.write("## Status\n\n")
+
+    report.write("Day 1 Data Ingestion Completed Successfully.\n")
+
+print("\n")
+print("=" * 80)
+print("REPORT GENERATED")
+print("=" * 80)
+
+print(f"Report saved at : {REPORT_FILE}")
+
+print("\n")
+print("=" * 80)
+print("DAY 1 COMPLETED SUCCESSFULLY")
+print("=" * 80)
